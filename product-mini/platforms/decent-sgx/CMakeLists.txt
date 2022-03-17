@@ -67,7 +67,18 @@ if (NOT DEFINED WAMR_BUILD_LIB_PTHREAD)
   set (WAMR_BUILD_LIB_PTHREAD 0)
 endif ()
 
-if (NOT MSVC)
+if (MSVC)
+  STRING (REGEX REPLACE "/RTC(su|[1su])" ""
+    CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+  STRING (REGEX REPLACE "/RTC(su|[1su])" ""
+    CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+  STRING (REGEX REPLACE "/RTC(su|[1su])" ""
+    CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+  STRING (REGEX REPLACE "/RTC(su|[1su])" ""
+    CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
+endif()
+
+if (UNIX)
   set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
   set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -ffunction-sections -fdata-sections \
                                        -Wall -Wno-unused-parameter -Wno-pedantic \
@@ -77,5 +88,13 @@ endif()
 set (WAMR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../..)
 
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
-add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE})
-target_include_directories(vmlib PUBLIC ${WAMR_ROOT_DIR}/core/iwasm/include)
+
+add_library(vmlib_decent_sgx ${WAMR_RUNTIME_LIB_SOURCE})
+
+target_include_directories(vmlib_decent_sgx
+                            PUBLIC ${WAMR_ROOT_DIR}/core/iwasm/include)
+
+if (WIN32)
+  target_compile_definitions(vmlib_decent_sgx
+                              PUBLIC COMPILING_WASM_RUNTIME_API=1)
+endif()

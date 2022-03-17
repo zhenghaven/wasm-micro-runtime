@@ -24,11 +24,9 @@
 extern "C" {
 #endif
 
-#ifdef BH_PLATFORM_LINUX_SGX
 typedef sgx_thread_t       korp_tid;
 typedef sgx_thread_mutex_t korp_mutex;
 typedef sgx_thread_cond_t  korp_cond;
-#endif
 
 #define os_malloc        wasm_os_malloc
 #define os_realloc       wasm_os_realloc
