@@ -5,7 +5,7 @@ cmake_minimum_required (VERSION 2.8)
 
 project (iwasm LANGUAGES C)
 
-set (WAMR_BUILD_PLATFORM "linux-sgx")
+set (WAMR_BUILD_PLATFORM "decent-sgx")
 
 # Reset default linker flags
 set (CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
