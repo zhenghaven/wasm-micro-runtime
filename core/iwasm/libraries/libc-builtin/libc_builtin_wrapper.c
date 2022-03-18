@@ -13,6 +13,18 @@
 #define strcasecmp _stricmp
 #endif
 
+#ifdef BH_PLATFORM_WIN_SGX
+#ifdef strncasecmp
+#undef strncasecmp
+#endif
+#ifdef strcasecmp
+#undef strcasecmp
+#endif
+
+#define strncasecmp wasm_os_strncasecmp
+#define strcasecmp  wasm_os_strcasecmp
+#endif
+
 void
 wasm_runtime_set_exception(wasm_module_inst_t module, const char *exception);
 

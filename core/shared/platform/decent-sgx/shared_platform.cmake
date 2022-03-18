@@ -5,7 +5,6 @@ set (PLATFORM_SHARED_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 if(WIN32)
   add_definitions(-DBH_PLATFORM_WIN_SGX)
-  add_definitions(-DBH_PLATFORM_WINDOWS)
 else()
   add_definitions(-DBH_PLATFORM_LINUX_SGX)
 endif()

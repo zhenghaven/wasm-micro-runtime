@@ -55,11 +55,14 @@ endif ()
 if (CMAKE_SIZEOF_VOID_P EQUAL 8)
   if (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_64"
       OR WAMR_BUILD_TARGET MATCHES "AARCH64.*" OR WAMR_BUILD_TARGET MATCHES "RISCV64.*")
+    if ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
+    else () # decent-sgx
     if (NOT WAMR_BUILD_PLATFORM STREQUAL "windows")
       # Add -fPIC flag if build as 64-bit
       set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
       set (CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "${CMAKE_SHARED_LIBRARY_LINK_C_FLAGS} -fPIC")
     endif ()
+    endif () # decent-sgx
   else ()
     include(CheckCCompilerFlag)
     Check_C_Compiler_Flag(-m32 M32_OK)
@@ -98,6 +101,9 @@ if (WAMR_BUILD_JIT EQUAL 1)
       if (WAMR_BUILD_PLATFORM STREQUAL "windows")
         set (LLVM_BUILD_ROOT "${LLVM_SRC_ROOT}/win32build")
       endif ()
+      if ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
+        set (LLVM_BUILD_ROOT "${LLVM_SRC_ROOT}/win32build")
+      endif () # decent-sgx
       if (NOT EXISTS "${LLVM_BUILD_ROOT}")
         message (FATAL_ERROR "Cannot find LLVM dir: ${LLVM_BUILD_ROOT}")
       endif ()

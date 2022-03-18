@@ -106,6 +106,7 @@ int wasm_os_mutex_unlock(korp_mutex *mutex)
     return sgx_thread_mutex_unlock(mutex);
 }
 
+#ifdef BH_PLATFORM_LINUX_SGX
 void * wasm_os_mmap(void *hint, size_t size, int prot, int flags)
 {
     int mprot = 0;
@@ -175,6 +176,7 @@ int wasm_os_mprotect(void *addr, size_t size, int prot)
 
     return (st == SGX_SUCCESS ? 0 : -1);
 }
+#endif
 
 void wasm_os_dcache_flush(void)
 {}

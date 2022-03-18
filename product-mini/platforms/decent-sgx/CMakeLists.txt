@@ -3,7 +3,11 @@
 
 cmake_minimum_required (VERSION 3.0)
 
-project (iwasm LANGUAGES C)
+project (iwasm LANGUAGES C ASM)
+
+if (WIN32)
+  enable_language(ASM_MASM)
+endif()
 
 set (WAMR_BUILD_PLATFORM "decent-sgx")
 
@@ -32,9 +36,15 @@ if (NOT DEFINED WAMR_BUILD_INTERP)
 endif ()
 
 if (NOT DEFINED WAMR_BUILD_AOT)
-  # Enable AOT by default
-  # Please install Intel SGX SDKv2.8 or later.
-  set (WAMR_BUILD_AOT 1)
+  if (NOT WIN32)
+    # Enable AOT by default
+    # Please install Intel SGX SDKv2.8 or later.
+    set (WAMR_BUILD_AOT 1)
+  else ()
+    # Disable AOT by default for Windows since implementations for
+    # platform_api_vmcore.h section 2 are missing.
+    set (WAMR_BUILD_AOT 0)
+  endif ()
 endif ()
 
 if (NOT DEFINED WAMR_BUILD_JIT)

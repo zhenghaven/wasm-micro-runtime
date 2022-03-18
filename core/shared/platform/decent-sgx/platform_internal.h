@@ -44,9 +44,11 @@ typedef sgx_thread_cond_t  korp_cond;
 #define os_mutex_lock    wasm_os_mutex_lock
 #define os_mutex_unlock  wasm_os_mutex_unlock
 
+#ifdef BH_PLATFORM_LINUX_SGX
 #define os_mmap          wasm_os_mmap
 #define os_munmap        wasm_os_munmap
 #define os_mprotect      wasm_os_mprotect
+#endif
 #define os_dcache_flush  wasm_os_dcache_flush
 
 #define os_cond_init     wasm_os_cond_init
@@ -62,7 +64,7 @@ typedef sgx_thread_cond_t  korp_cond;
 
 typedef void (*os_print_function_t)(const char *message);
 
-void os_set_print_function(os_print_function_t pf);
+void wasm_os_set_print_function(os_print_function_t pf);
 
 #ifdef __cplusplus
 }
