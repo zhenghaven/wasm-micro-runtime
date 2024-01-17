@@ -69,7 +69,7 @@ endif ()
 
 if (NOT DEFINED WAMR_BUILD_MULTI_MODULE)
   # Enable multiple modules
-  set (WAMR_BUILD_MULTI_MODULE 0)
+  set (WAMR_BUILD_MULTI_MODULE 1)
 endif ()
 
 if (NOT DEFINED WAMR_BUILD_LIB_PTHREAD)

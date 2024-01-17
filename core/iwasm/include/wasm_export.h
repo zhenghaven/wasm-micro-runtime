@@ -67,6 +67,10 @@ typedef struct WASMModuleCommon *wasm_module_t;
 struct WASMModuleInstanceCommon;
 typedef struct WASMModuleInstanceCommon *wasm_module_inst_t;
 
+/* Instantiated WASM global */
+struct WASMGlobalInstance;
+typedef struct WASMGlobalInstance *wasm_global_inst_t;
+
 /* Function instance */
 typedef void WASMFunctionInstanceCommon;
 typedef WASMFunctionInstanceCommon *wasm_function_inst_t;
@@ -402,6 +406,46 @@ wasm_runtime_lookup_wasi_start_function(wasm_module_inst_t module_inst);
 WASM_RUNTIME_API_EXTERN wasm_function_inst_t
 wasm_runtime_lookup_function(wasm_module_inst_t const module_inst,
                              const char *name, const char *signature);
+
+/**
+ * Lookup an exported global in the WASM module instance.
+ *
+ * @param module_inst the module instance
+ * @param name the name of the global
+ *
+ * @return the global instance found, NULL if not found
+ */
+WASM_RUNTIME_API_EXTERN wasm_global_inst_t
+wasm_runtime_lookup_global(wasm_module_inst_t const module_inst,
+                           const char *name);
+
+/**
+ * @brief Get the value of a I32 global variable
+ *
+ * @param module_inst the module instance
+ * @param global_inst the global instance
+ * @param g_value the pointer to store the value
+ *
+ * @return true if success, false otherwise
+ */
+WASM_RUNTIME_API_EXTERN bool
+wasm_runtime_get_global_i32(wasm_module_inst_t const module_inst,
+                            wasm_global_inst_t const global_inst,
+                            int32_t *g_value);
+
+/**
+ * @brief Get the value of a I64 global variable
+ *
+ * @param module_inst the module instance
+ * @param global_inst the global instance
+ * @param g_value the pointer to store the value
+ *
+ * @return true if success, false otherwise
+ */
+WASM_RUNTIME_API_EXTERN bool
+wasm_runtime_get_global_i64(wasm_module_inst_t const module_inst,
+                            wasm_global_inst_t const global_inst,
+                            int64_t *g_value);
 
 /**
  * Create execution environment for a WASM module instance.

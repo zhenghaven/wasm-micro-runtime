@@ -1198,6 +1198,48 @@ wasm_runtime_lookup_function(WASMModuleInstanceCommon *const module_inst,
     return NULL;
 }
 
+#if WASM_ENABLE_MULTI_MODULE != 0
+WASMGlobalInstance *
+wasm_runtime_lookup_global(WASMModuleInstanceCommon *const module_inst,
+                           const char *name)
+{
+#if WASM_ENABLE_INTERP != 0
+    if (module_inst->module_type == Wasm_Module_Bytecode)
+        return wasm_lookup_global(
+            (const WASMModuleInstance *)module_inst, name);
+#endif
+    return NULL;
+}
+#endif
+
+bool
+wasm_runtime_get_global_i32(WASMModuleInstanceCommon *const module_inst,
+                            WASMGlobalInstance *const global_inst,
+                            int32 *g_value)
+{
+    uint8* global_addr = wasm_get_global_addr(
+                        (const WASMModuleInstance *)module_inst, global_inst);
+    if (global_inst->type == VALUE_TYPE_I32) {
+        *g_value = *(int32 *)global_addr;
+        return true;
+    }
+    return false;
+}
+
+bool
+wasm_runtime_get_global_i64(WASMModuleInstanceCommon *const module_inst,
+                            WASMGlobalInstance *const global_inst,
+                            int64 *g_value)
+{
+    uint8* global_addr = wasm_get_global_addr(
+                        (const WASMModuleInstance *)module_inst, global_inst);
+    if (global_inst->type == VALUE_TYPE_I64) {
+        *g_value = GET_I64_FROM_ADDR(global_addr);
+        return true;
+    }
+    return false;
+}
+
 #if WASM_ENABLE_REF_TYPES != 0
 /* (uintptr_t)externref -> (uint32_t)index */
 /*   argv               ->   *ret_argv */

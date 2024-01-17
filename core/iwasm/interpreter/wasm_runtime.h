@@ -308,6 +308,10 @@ WASMTableInstance *
 wasm_lookup_table(const WASMModuleInstance *module_inst, const char *name);
 #endif
 
+uint8 *
+wasm_get_global_addr(const WASMModuleInstance *module_inst,
+                     const WASMGlobalInstance *global);
+
 bool
 wasm_call_function(WASMExecEnv *exec_env, WASMFunctionInstance *function,
                    unsigned argc, uint32 argv[]);
