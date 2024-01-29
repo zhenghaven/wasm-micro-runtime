@@ -122,6 +122,8 @@ include (${SHARED_DIR}/utils/uncommon/shared_uncommon.cmake)
 # STATIC LIBRARY
 add_library(iwasm_static STATIC ${WAMR_RUNTIME_LIB_SOURCE})
 set_target_properties (iwasm_static PROPERTIES OUTPUT_NAME vmlib)
+target_include_directories(iwasm_static
+    PUBLIC ${WAMR_ROOT_DIR}/core/iwasm/include)
 
 install (TARGETS iwasm_static ARCHIVE DESTINATION lib)
 
