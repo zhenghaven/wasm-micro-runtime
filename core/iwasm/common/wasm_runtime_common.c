@@ -1212,14 +1212,31 @@ wasm_runtime_lookup_global(WASMModuleInstanceCommon *const module_inst,
 }
 #endif
 
+static uint8*
+wasm_runtime_get_global_addr(WASMModuleInstanceCommon *const module_inst,
+                             WASMGlobalInstance *const global_inst)
+{
+#if WASM_ENABLE_INTERP != 0
+    if (module_inst->module_type == Wasm_Module_Bytecode)
+        return wasm_get_global_addr(
+                    (const WASMModuleInstance *)module_inst, global_inst);
+#endif
+#if WASM_ENABLE_AOT != 0
+    // if (module_inst->module_type == Wasm_Module_AoT)
+    //     return aot_get_global_addr(
+    //                 (const AOTModuleInstance *)module_inst, global_inst);
+#endif
+    return NULL;
+}
+
 bool
 wasm_runtime_get_global_i32(WASMModuleInstanceCommon *const module_inst,
                             WASMGlobalInstance *const global_inst,
                             int32 *g_value)
 {
-    uint8* global_addr = wasm_get_global_addr(
-                        (const WASMModuleInstance *)module_inst, global_inst);
-    if (global_inst->type == VALUE_TYPE_I32) {
+    uint8* global_addr = wasm_runtime_get_global_addr(
+                        module_inst, global_inst);
+    if (global_addr && global_inst->type == VALUE_TYPE_I32) {
         *g_value = *(int32 *)global_addr;
         return true;
     }
@@ -1231,9 +1248,9 @@ wasm_runtime_get_global_i64(WASMModuleInstanceCommon *const module_inst,
                             WASMGlobalInstance *const global_inst,
                             int64 *g_value)
 {
-    uint8* global_addr = wasm_get_global_addr(
-                        (const WASMModuleInstance *)module_inst, global_inst);
-    if (global_inst->type == VALUE_TYPE_I64) {
+    uint8* global_addr = wasm_runtime_get_global_addr(
+                        module_inst, global_inst);
+    if (global_addr && global_inst->type == VALUE_TYPE_I64) {
         *g_value = GET_I64_FROM_ADDR(global_addr);
         return true;
     }
