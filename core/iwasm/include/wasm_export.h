@@ -67,6 +67,10 @@ typedef struct WASMModuleCommon *wasm_module_t;
 struct WASMModuleInstanceCommon;
 typedef struct WASMModuleInstanceCommon *wasm_module_inst_t;
 
+/* Instantiated WASM global */
+struct WASMGlobalInstanceCommon;
+typedef struct WASMGlobalInstanceCommon *wasm_global_inst_t;
+
 /* Function instance */
 typedef void WASMFunctionInstanceCommon;
 typedef WASMFunctionInstanceCommon *wasm_function_inst_t;
@@ -648,6 +652,46 @@ WASM_RUNTIME_API_EXTERN void
 wasm_func_get_result_types(wasm_function_inst_t const func_inst,
                            wasm_module_inst_t const module_inst,
                            wasm_valkind_t *result_types);
+
+/**
+ * Lookup an exported global in the WASM module instance.
+ *
+ * @param module_inst the module instance
+ * @param name the name of the global
+ *
+ * @return the global instance found, NULL if not found
+ */
+WASM_RUNTIME_API_EXTERN wasm_global_inst_t
+wasm_runtime_lookup_global(wasm_module_inst_t const module_inst,
+                           const char *name);
+
+/**
+ * @brief Get the value of a I32 global variable
+ *
+ * @param module_inst the module instance
+ * @param global_inst the global instance
+ * @param g_value the pointer to store the value
+ *
+ * @return true if success, false otherwise
+ */
+WASM_RUNTIME_API_EXTERN bool
+wasm_runtime_get_global_i32(wasm_module_inst_t const module_inst,
+                            wasm_global_inst_t const global_inst,
+                            int32_t *g_value);
+
+/**
+ * @brief Get the value of a I64 global variable
+ *
+ * @param module_inst the module instance
+ * @param global_inst the global instance
+ * @param g_value the pointer to store the value
+ *
+ * @return true if success, false otherwise
+ */
+WASM_RUNTIME_API_EXTERN bool
+wasm_runtime_get_global_i64(wasm_module_inst_t const module_inst,
+                            wasm_global_inst_t const global_inst,
+                            int64_t *g_value);
 
 /**
  * Create execution environment for a WASM module instance.

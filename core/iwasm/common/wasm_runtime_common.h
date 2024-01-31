@@ -352,6 +352,13 @@ typedef struct WASMModuleInstanceCommon {
     uint8 module_inst_data[1];
 } WASMModuleInstanceCommon;
 
+typedef struct WASMGlobalInstanceCommon {
+    /* value type, VALUE_TYPE_I32/I64/F32/F64 */
+    uint8 type;
+    /* mutable or constant */
+    bool is_mutable;
+} WASMGlobalInstanceCommon;
+
 typedef struct WASMModuleMemConsumption {
     uint32 total_size;
     uint32 module_struct_size;

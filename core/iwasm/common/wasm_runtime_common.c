@@ -1852,6 +1852,66 @@ wasm_func_get_result_types(WASMFunctionInstanceCommon *const func_inst,
     }
 }
 
+#if WASM_ENABLE_MULTI_MODULE != 0
+WASMGlobalInstanceCommon *
+wasm_runtime_lookup_global(WASMModuleInstanceCommon *const module_inst,
+                           const char *name)
+{
+#if WASM_ENABLE_INTERP != 0
+    if (module_inst->module_type == Wasm_Module_Bytecode)
+        return wasm_lookup_global(
+            (const WASMModuleInstance *)module_inst, name);
+#endif
+    return NULL;
+}
+#endif
+
+static uint8*
+wasm_runtime_get_global_addr(WASMModuleInstanceCommon *const module_inst,
+                             WASMGlobalInstanceCommon *const global_inst)
+{
+#if WASM_ENABLE_INTERP != 0
+    if (module_inst->module_type == Wasm_Module_Bytecode)
+        return wasm_get_global_addr(
+                    (const WASMModuleInstance *)module_inst,
+                    (const WASMGlobalInstance *)global_inst);
+#endif
+#if WASM_ENABLE_AOT != 0
+    // if (module_inst->module_type == Wasm_Module_AoT)
+    //     return aot_get_global_addr(
+    //                 (const AOTModuleInstance *)module_inst, global_inst);
+#endif
+    return NULL;
+}
+
+bool
+wasm_runtime_get_global_i32(WASMModuleInstanceCommon *const module_inst,
+                            WASMGlobalInstanceCommon *const global_inst,
+                            int32 *g_value)
+{
+    uint8* global_addr = wasm_runtime_get_global_addr(
+                        module_inst, global_inst);
+    if (global_addr && global_inst->type == VALUE_TYPE_I32) {
+        *g_value = *(int32 *)global_addr;
+        return true;
+    }
+    return false;
+}
+
+bool
+wasm_runtime_get_global_i64(WASMModuleInstanceCommon *const module_inst,
+                            WASMGlobalInstanceCommon *const global_inst,
+                            int64 *g_value)
+{
+    uint8* global_addr = wasm_runtime_get_global_addr(
+                        module_inst, global_inst);
+    if (global_addr && global_inst->type == VALUE_TYPE_I64) {
+        *g_value = GET_I64_FROM_ADDR(global_addr);
+        return true;
+    }
+    return false;
+}
+
 #if WASM_ENABLE_REF_TYPES != 0
 /* (uintptr_t)externref -> (uint32)index */
 /*   argv               ->   *ret_argv */
