@@ -45,6 +45,8 @@ elseif (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_6
       else ()
         set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_mingw_x64.s)
       endif ()
+    elseif ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
+      set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_em64.asm) # decent-sgx
     else ()
       set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_em64.s)
     endif ()
@@ -55,6 +57,8 @@ elseif (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_6
       else ()
         set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_mingw_x64_simd.s)
       endif ()
+    elseif ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
+      set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_em64_simd.asm) # decent-sgx
     else()
       set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_em64_simd.s)
     endif()
@@ -62,6 +66,8 @@ elseif (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_6
 elseif (WAMR_BUILD_TARGET STREQUAL "X86_32")
   if (WAMR_BUILD_PLATFORM STREQUAL "windows")
     set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_ia32.asm)
+  elseif ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
+    set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_ia32.asm) # decent-sgx
   else ()
     set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_ia32.s)
   endif ()
