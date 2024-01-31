@@ -24,36 +24,6 @@
 extern "C" {
 #endif
 
-typedef sgx_thread_t       korp_tid;
-typedef sgx_thread_mutex_t korp_mutex;
-typedef sgx_thread_cond_t  korp_cond;
-
-#define os_malloc        wasm_os_malloc
-#define os_realloc       wasm_os_realloc
-#define os_free          wasm_os_free
-#define os_printf        wasm_os_printf
-#define os_vprintf       wasm_os_vprintf
-
-#define os_time_get_boot_microsecond   wasm_os_time_get_boot_microsecond
-
-#define os_thread_get_stack_boundary   wasm_os_thread_get_stack_boundary
-
-#define os_self_thread   wasm_os_self_thread
-#define os_mutex_init    wasm_os_mutex_init
-#define os_mutex_destroy wasm_os_mutex_destroy
-#define os_mutex_lock    wasm_os_mutex_lock
-#define os_mutex_unlock  wasm_os_mutex_unlock
-
-#ifdef BH_PLATFORM_LINUX_SGX
-#define os_mmap          wasm_os_mmap
-#define os_munmap        wasm_os_munmap
-#define os_mprotect      wasm_os_mprotect
-#endif
-#define os_dcache_flush  wasm_os_dcache_flush
-
-#define os_cond_init     wasm_os_cond_init
-#define os_cond_destroy  wasm_os_cond_destroy
-
 #define _STACK_SIZE_ADJUSTMENT (32 * 1024)
 
 /* Stack size of applet threads's native part.  */
@@ -61,6 +31,16 @@ typedef sgx_thread_cond_t  korp_cond;
 
 /* Default thread priority */
 #define BH_THREAD_DEFAULT_PRIORITY 0
+
+typedef sgx_thread_t       korp_tid;
+typedef sgx_thread_mutex_t korp_mutex;
+typedef sgx_thread_cond_t  korp_cond;
+
+typedef void* korp_rwlock;
+typedef void* korp_sem;
+typedef void* os_raw_file_handle;
+typedef void* os_file_handle;
+typedef void* os_dir_stream;
 
 typedef void (*os_print_function_t)(const char *message);
 
