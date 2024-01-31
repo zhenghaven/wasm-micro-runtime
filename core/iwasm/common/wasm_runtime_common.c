@@ -1859,7 +1859,7 @@ wasm_runtime_lookup_global(WASMModuleInstanceCommon *const module_inst,
 {
 #if WASM_ENABLE_INTERP != 0
     if (module_inst->module_type == Wasm_Module_Bytecode)
-        return wasm_lookup_global(
+        return (WASMGlobalInstanceCommon *)wasm_lookup_global(
             (const WASMModuleInstance *)module_inst, name);
 #endif
     return NULL;
