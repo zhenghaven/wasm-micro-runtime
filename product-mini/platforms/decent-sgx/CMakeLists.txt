@@ -20,9 +20,11 @@ if (NOT DEFINED WAMR_BUILD_TARGET)
   if (CMAKE_SIZEOF_VOID_P EQUAL 8)
     # Build as X86_64 by default in 64-bit platform
     set (WAMR_BUILD_TARGET "X86_64")
-  else ()
+  elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
     # Build as X86_32 by default in 32-bit platform
     set (WAMR_BUILD_TARGET "X86_32")
+  else ()
+    message(SEND_ERROR "Unsupported build target platform!")
   endif ()
 endif ()
 
@@ -52,6 +54,11 @@ if (NOT DEFINED WAMR_BUILD_JIT)
   set (WAMR_BUILD_JIT 0)
 endif ()
 
+if (NOT DEFINED WAMR_BUILD_FAST_JIT)
+  # Enable Fast JIT by default
+  set (WAMR_BUILD_FAST_JIT 1)
+endif ()
+
 if (NOT DEFINED WAMR_BUILD_LIBC_BUILTIN)
   # Enable libc builtin support by default
   set (WAMR_BUILD_LIBC_BUILTIN 1)
@@ -61,6 +68,11 @@ if (NOT DEFINED WAMR_BUILD_LIBC_WASI)
   # Enable libc wasi support by default
   set (WAMR_BUILD_LIBC_WASI 0)
 endif ()
+
+if (NOT DEFINED WAMR_BUILD_LIB_RATS)
+  # Disable lib rats support by default
+  set (WAMR_BUILD_LIB_RATS 0)
+endif()
 
 if (NOT DEFINED WAMR_BUILD_FAST_INTERP)
   # Enable fast interpreter
@@ -74,7 +86,22 @@ endif ()
 
 if (NOT DEFINED WAMR_BUILD_LIB_PTHREAD)
   # Enable pthread library by default
-  set (WAMR_BUILD_LIB_PTHREAD 0)
+  set (WAMR_BUILD_LIB_PTHREAD 1)
+endif ()
+
+if (NOT DEFINED WAMR_BUILD_SIMD)
+  # Disable SIMD by default
+  set (WAMR_BUILD_SIMD 0)
+endif ()
+
+if (NOT DEFINED WAMR_BUILD_SGX_IPFS)
+  # Disable SGX IPFS by default
+  set (WAMR_BUILD_SGX_IPFS 0)
+endif ()
+
+if (NOT DEFINED WAMR_BUILD_STATIC_PGO)
+  # Disable static PGO by default
+  set (WAMR_BUILD_STATIC_PGO 0)
 endif ()
 
 if (MSVC)
@@ -107,4 +134,8 @@ target_include_directories(vmlib_decent_sgx
 if (WIN32)
   target_compile_definitions(vmlib_decent_sgx
                               PUBLIC COMPILING_WASM_RUNTIME_API=1)
+endif()
+
+if (WAMR_BUILD_FAST_JIT EQUAL 1)
+  target_link_libraries(iwasm_static PRIVATE asmjit)
 endif()

@@ -12,6 +12,16 @@ include_directories (${IWASM_FAST_JIT_DIR})
 
 if (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_64")
     include(FetchContent)
+    if (WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") # decent-sgx
+        set(ASMJIT_STATIC TRUE)
+        FetchContent_Declare(
+            asmjit
+            GIT_REPOSITORY https://github.com/asmjit/asmjit.git
+            GIT_TAG c1019f1642a588107148f64ba54584b0ae3ec8d1
+            PATCH_COMMAND  git apply ${IWASM_FAST_JIT_DIR}/asmjit_sgx_patch.diff
+            UPDATE_DISCONNECTED TRUE
+        ) # decent-sgx
+    else () # decent-sgx
     if (NOT WAMR_BUILD_PLATFORM STREQUAL "linux-sgx")
         FetchContent_Declare(
             asmjit
@@ -26,6 +36,7 @@ if (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_64")
             PATCH_COMMAND  git apply ${IWASM_FAST_JIT_DIR}/asmjit_sgx_patch.diff
         )
     endif ()
+    endif () # decent-sgx
     FetchContent_GetProperties(asmjit)
     if (NOT asmjit_POPULATED)
         message ("-- Fetching asmjit ..")

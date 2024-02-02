@@ -20,6 +20,10 @@
 
 #include <sgx_thread.h>
 
+#ifdef BH_PLATFORM_LINUX_SGX
+#include <pthread.h>
+#endif // BH_PLATFORM_LINUX_SGX
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -32,7 +36,9 @@ extern "C" {
 /* Default thread priority */
 #define BH_THREAD_DEFAULT_PRIORITY 0
 
-typedef sgx_thread_t       korp_tid;
+#ifdef BH_PLATFORM_LINUX_SGX
+typedef pthread_t       korp_tid;
+#endif // BH_PLATFORM_LINUX_SGX
 typedef sgx_thread_mutex_t korp_mutex;
 typedef sgx_thread_cond_t  korp_cond;
 
@@ -45,6 +51,13 @@ typedef void* os_dir_stream;
 typedef void (*os_print_function_t)(const char *message);
 
 void wasm_os_set_print_function(os_print_function_t pf);
+
+#ifdef BH_PLATFORM_LINUX_SGX
+#define os_memory_order_acquire __ATOMIC_ACQUIRE
+#define os_memory_order_release __ATOMIC_RELEASE
+#define os_memory_order_seq_cst __ATOMIC_SEQ_CST
+#define os_atomic_thread_fence __atomic_thread_fence
+#endif // BH_PLATFORM_LINUX_SGX
 
 #ifdef __cplusplus
 }

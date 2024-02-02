@@ -70,11 +70,6 @@ uint64 os_time_get_boot_microsecond()
     return 0;
 }
 
-korp_tid os_self_thread()
-{
-    return sgx_thread_self();
-}
-
 int os_mutex_init(korp_mutex *mutex)
 {
     return sgx_thread_mutex_init(mutex, NULL);
@@ -110,6 +105,13 @@ int os_cond_wait(korp_cond *cond, korp_mutex *mutex)
     return sgx_thread_cond_wait(cond, mutex);
 }
 
+int os_cond_reltimedwait(korp_cond *cond, korp_mutex *mutex, uint64 useconds)
+{
+    os_printf("warning: SGX pthread_cond_timedwait isn't supported, "
+              "calling pthread_cond_wait instead!\n");
+    return BHT_ERROR;
+}
+
 int os_cond_signal(korp_cond *cond)
 {
     return sgx_thread_cond_signal(cond);
@@ -119,78 +121,6 @@ int os_cond_broadcast(korp_cond *cond)
 {
     return sgx_thread_cond_broadcast(cond);
 }
-
-#ifdef BH_PLATFORM_LINUX_SGX
-void * os_mmap(void *hint, size_t size, int prot, int flags, os_file_handle file)
-{
-    int mprot = 0;
-    uint64 aligned_size, page_size;
-    void *ret = NULL;
-    sgx_status_t st = 0;
-
-    page_size = getpagesize();
-    aligned_size = (size + page_size - 1) & ~(page_size - 1);
-
-    if (aligned_size >= UINT32_MAX)
-        return NULL;
-
-    ret = sgx_alloc_rsrv_mem(aligned_size);
-    if (ret == NULL) {
-        os_printf("os_mmap(size=%u, aligned size=%lu, prot=0x%x) failed.", size,
-                  aligned_size, prot);
-        return NULL;
-    }
-
-    if (prot & MMAP_PROT_READ)
-        mprot |= SGX_PROT_READ;
-    if (prot & MMAP_PROT_WRITE)
-        mprot |= SGX_PROT_WRITE;
-    if (prot & MMAP_PROT_EXEC)
-        mprot |= SGX_PROT_EXEC;
-
-    st = sgx_tprotect_rsrv_mem(ret, aligned_size, mprot);
-    if (st != SGX_SUCCESS) {
-        os_printf("os_mmap(size=%u, prot=0x%x) failed to set protect.", size,
-                  prot);
-        sgx_free_rsrv_mem(ret, aligned_size);
-        return NULL;
-    }
-
-    return ret;
-}
-
-void os_munmap(void *addr, size_t size)
-{
-    uint64 aligned_size, page_size;
-
-    page_size = getpagesize();
-    aligned_size = (size + page_size - 1) & ~(page_size - 1);
-    sgx_free_rsrv_mem(addr, aligned_size);
-}
-
-int os_mprotect(void *addr, size_t size, int prot)
-{
-    int mprot = 0;
-    sgx_status_t st = 0;
-    uint64 aligned_size, page_size;
-
-    page_size = getpagesize();
-    aligned_size = (size + page_size - 1) & ~(page_size - 1);
-
-    if (prot & MMAP_PROT_READ)
-        mprot |= SGX_PROT_READ;
-    if (prot & MMAP_PROT_WRITE)
-        mprot |= SGX_PROT_WRITE;
-    if (prot & MMAP_PROT_EXEC)
-        mprot |= SGX_PROT_EXEC;
-    st = sgx_tprotect_rsrv_mem(addr, aligned_size, mprot);
-    if (st != SGX_SUCCESS)
-        os_printf("os_mprotect(addr=0x%" PRIx64 ", size=%u, prot=0x%x) failed.",
-                  (uintptr_t)addr, size, prot);
-
-    return (st == SGX_SUCCESS ? 0 : -1);
-}
-#endif
 
 void os_dcache_flush(void)
 {}

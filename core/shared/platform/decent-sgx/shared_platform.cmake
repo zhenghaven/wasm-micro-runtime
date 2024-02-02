@@ -47,6 +47,6 @@ if (NOT WAMR_BUILD_THREAD_MGR EQUAL 1)
   add_definitions(-DSGX_DISABLE_PTHREAD)
 endif ()
 
-file (GLOB source_all ${PLATFORM_SHARED_DIR}/*.c)
+file (GLOB source_all ${PLATFORM_SHARED_DIR}/*.[c|cpp])
 
 set (PLATFORM_SHARED_SOURCE ${source_all})

@@ -138,6 +138,9 @@ target_link_libraries (iwasm_static INTERFACE ${LLVM_AVAILABLE_LIBS} ${UV_A_LIBS
 if (WAMR_BUILD_WASM_CACHE EQUAL 1)
   target_link_libraries(iwasm_static INTERFACE boringssl_crypto)
 endif ()
+if (WAMR_BUILD_FAST_JIT EQUAL 1)
+  target_link_libraries(iwasm_static PRIVATE asmjit)
+endif()
 
 install (TARGETS iwasm_static ARCHIVE DESTINATION lib)
 
@@ -149,6 +152,9 @@ target_link_libraries (iwasm_shared INTERFACE ${LLVM_AVAILABLE_LIBS} ${UV_A_LIBS
 if (WAMR_BUILD_WASM_CACHE EQUAL 1)
   target_link_libraries(iwasm_shared INTERFACE boringssl_crypto)
 endif ()
+if (WAMR_BUILD_FAST_JIT EQUAL 1)
+  target_link_libraries(iwasm_shared PRIVATE asmjit)
+endif()
 
 if (MINGW)
   target_link_libraries (iwasm_shared -lWs2_32)
