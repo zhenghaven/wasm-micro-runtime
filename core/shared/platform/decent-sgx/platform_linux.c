@@ -6,9 +6,13 @@
 
 #include "platform_api_vmcore.h"
 #include "platform_api_extension.h"
+#include "sgx_rsrv_mem_mngr.h"
 
 
 #ifdef BH_PLATFORM_LINUX_SGX
+
+
+extern int getpagesize(void);
 
 
 typedef struct {

@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
-#include "platform_api_vmcore.h"
-#include "sgx_rsrv_mem_mngr.h"
 
-extern int getpagesize(void);
+#include "platform_api_vmcore.h"
+
 
 #define FIXED_BUFFER_SIZE (1 << 9)
 

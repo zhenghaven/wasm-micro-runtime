@@ -137,5 +137,5 @@ if (WIN32)
 endif()
 
 if (WAMR_BUILD_FAST_JIT EQUAL 1)
-  target_link_libraries(iwasm_static PRIVATE asmjit)
+  target_link_libraries(vmlib_decent_sgx PRIVATE asmjit)
 endif()
