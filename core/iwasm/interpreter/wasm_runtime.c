@@ -2270,19 +2270,22 @@ wasm_lookup_table(const WASMModuleInstance *module_inst, const char *name)
 }
 #endif
 
-uint8 *
+void *
 wasm_get_global_addr(const WASMModuleInstance *module_inst,
                      const WASMGlobalInstance *global)
 {
+    // reference get_global_addr from wasm_interp_classic.c and wasm_interp_fast.c
+    uint8 *addr = NULL;
     uint8 *global_data = module_inst->global_data;
 #if WASM_ENABLE_MULTI_MODULE == 0
-    return global_data + global->data_offset;
+    addr = global_data + global->data_offset;
 #else
-    return global->import_global_inst
+    addr = global->import_global_inst
                ? global->import_module_inst->global_data
                      + global->import_global_inst->data_offset
                : global_data + global->data_offset;
 #endif
+    return (void *)addr;
 }
 
 #ifdef OS_ENABLE_HW_BOUND_CHECK

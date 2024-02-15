@@ -666,6 +666,17 @@ wasm_runtime_lookup_global(wasm_module_inst_t const module_inst,
                            const char *name);
 
 /**
+ * @brief Get the pointer to the memory storing the global value
+ *
+ * @param module_inst the module instance
+ * @param global_inst the global instance
+ * @return the pointer to the memory storing the global value; NULL if failed
+ */
+WASM_RUNTIME_API_EXTERN void *
+wasm_runtime_get_global_addr(wasm_module_inst_t const module_inst,
+                             wasm_global_inst_t const global_inst);
+
+/**
  * @brief Get the value of a I32 global variable
  *
  * @param module_inst the module instance

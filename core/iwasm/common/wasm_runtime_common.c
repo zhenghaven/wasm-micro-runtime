@@ -1866,7 +1866,7 @@ wasm_runtime_lookup_global(WASMModuleInstanceCommon *const module_inst,
 }
 #endif
 
-static uint8*
+void *
 wasm_runtime_get_global_addr(WASMModuleInstanceCommon *const module_inst,
                              WASMGlobalInstanceCommon *const global_inst)
 {
