@@ -30,7 +30,7 @@
 #define ENCLAVE_FILENAME "enclave.signed.so"
 #define MAX_PATH 1024
 
-#define TEST_OCALL_API 0
+#define TEST_OCALL_API 1
 
 static sgx_enclave_id_t g_eid = 0;
 

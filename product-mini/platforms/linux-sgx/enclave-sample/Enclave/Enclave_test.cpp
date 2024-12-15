@@ -170,7 +170,7 @@ ecall_iwasm_test()
     /** fstat **/
     /** 3. open file firstly **/
     fd = open(file, O_RDWR);
-    statbuf = (stat *)malloc(sizeof(stat));
+    statbuf = (struct stat *)malloc(sizeof(struct stat));
     ret = fstat(fd, statbuf);
     if (ret == 0) {
         ocall_print("\tOperation fstat success. \n");
@@ -287,9 +287,28 @@ ecall_iwasm_test()
     }
 
     /** getrandom **/
+    ocall_print("buf=");
+    ocall_print(buf);
+    ocall_print("\n");
     total_size = getrandom(buf, 1024, 0);
-    if (ret != -1) {
+    if (total_size != -1) {
+        ocall_print("buf=");
+        ocall_print(buf);
+        ocall_print("\n");
         ocall_print("\tOperation getrandom success. \n");
+    }
+
+    /** getentropy **/
+    strcpy(buf, "test");
+    ocall_print("buf=");
+    ocall_print(buf);
+    ocall_print("\n");
+    total_size = getentropy(buf, 1024);
+    if (total_size != -1) {
+        ocall_print("buf=");
+        ocall_print(buf);
+        ocall_print("\n");
+        ocall_print("\tOperation getentropy success. \n");
     }
 
     /** writev **/
