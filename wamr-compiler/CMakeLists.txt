@@ -13,6 +13,11 @@ if (NOT DEFINED WAMR_BUILD_PLATFORM)
   endif()
 endif()
 
+if ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
+  project (aot-compiler C ASM CXX)
+  enable_language (ASM_MASM)
+  add_definitions(-DCOMPILING_WASM_RUNTIME_API=1)
+else () # decent-sgx
 if (NOT WAMR_BUILD_PLATFORM STREQUAL "windows")
   project (aot-compiler)
 else()
@@ -20,6 +25,7 @@ else()
   enable_language (ASM_MASM)
   add_definitions(-DCOMPILING_WASM_RUNTIME_API=1)
 endif()
+endif () # decent-sgx
 
 set (CMAKE_CXX_STANDARD 17)
 
@@ -72,6 +78,10 @@ if (NOT WAMR_BUILD_TARGET)
     if (("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "Win32"))
       set (WAMR_BUILD_TARGET "X86_32")
     endif()
+  elseif ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
+    if (("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "Win32"))
+      set (WAMR_BUILD_TARGET "X86_32")
+    endif()
   elseif (WAMR_BUILD_PLATFORM STREQUAL "darwin")
     if (CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
       set (WAMR_BUILD_TARGET "AARCH64")
@@ -111,6 +121,8 @@ message ("-- Build as target ${WAMR_BUILD_TARGET}")
 if (CMAKE_SIZEOF_VOID_P EQUAL 8)
     if (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_64"
         OR WAMR_BUILD_TARGET MATCHES "AARCH64.*" OR WAMR_BUILD_TARGET MATCHES "RISCV64.*")
+    if ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
+    else () # decent-sgx
     if (NOT WAMR_BUILD_PLATFORM STREQUAL "windows")
       # Add -fPIC flag if build as 64-bit
       set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
@@ -118,6 +130,7 @@ if (CMAKE_SIZEOF_VOID_P EQUAL 8)
       set (CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "${CMAKE_SHARED_LIBRARY_LINK_C_FLAGS} -fPIC")
       set (CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "${CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS} -fPIC")
     endif ()
+    endif () # decent-sgx
   else ()
     add_definitions (-m32)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -m32")
@@ -140,6 +153,12 @@ endif()
 # Enable LLVM
 if (NOT WAMR_BUILD_WITH_CUSTOM_LLVM)
   set (LLVM_SRC_ROOT "${PROJECT_SOURCE_DIR}/../core/deps/llvm")
+  if ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
+    if (NOT EXISTS "${LLVM_SRC_ROOT}/win32build")
+      message (FATAL_ERROR "Cannot find LLVM dir: ${LLVM_SRC_ROOT}/win32build")
+    endif ()
+    set (CMAKE_PREFIX_PATH "${LLVM_SRC_ROOT}/win32build;${CMAKE_PREFIX_PATH}")
+  else () # decent-sgx
   if (WAMR_BUILD_PLATFORM STREQUAL "windows")
     if (NOT EXISTS "${LLVM_SRC_ROOT}/win32build")
       message (FATAL_ERROR "Cannot find LLVM dir: ${LLVM_SRC_ROOT}/win32build")
@@ -151,6 +170,7 @@ if (NOT WAMR_BUILD_WITH_CUSTOM_LLVM)
     endif ()
     set (CMAKE_PREFIX_PATH "${LLVM_SRC_ROOT}/build;${CMAKE_PREFIX_PATH}")
   endif ()
+  endif () # decent-sgx
 endif ()
 
 find_package(LLVM REQUIRED CONFIG)

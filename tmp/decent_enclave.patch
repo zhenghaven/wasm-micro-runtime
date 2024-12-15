@@ -1,0 +1,1022 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 2582b49..2be2786 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -122,6 +122,8 @@ include (${SHARED_DIR}/utils/uncommon/shared_uncommon.cmake)
+ # STATIC LIBRARY
+ add_library(iwasm_static STATIC ${WAMR_RUNTIME_LIB_SOURCE})
+ set_target_properties (iwasm_static PROPERTIES OUTPUT_NAME vmlib)
++target_include_directories(iwasm_static
++    PUBLIC ${WAMR_ROOT_DIR}/core/iwasm/include)
+ 
+ install (TARGETS iwasm_static ARCHIVE DESTINATION lib)
+ 
+diff --git a/build-scripts/config_common.cmake b/build-scripts/config_common.cmake
+index 432acf5..efd4de4 100644
+--- a/build-scripts/config_common.cmake
++++ b/build-scripts/config_common.cmake
+@@ -55,11 +55,14 @@ endif ()
+ if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+   if (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_64"
+       OR WAMR_BUILD_TARGET MATCHES "AARCH64.*" OR WAMR_BUILD_TARGET MATCHES "RISCV64.*")
++    if ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
++    else () # decent-sgx
+     if (NOT WAMR_BUILD_PLATFORM STREQUAL "windows")
+       # Add -fPIC flag if build as 64-bit
+       set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+       set (CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "${CMAKE_SHARED_LIBRARY_LINK_C_FLAGS} -fPIC")
+     endif ()
++    endif () # decent-sgx
+   else ()
+     include(CheckCCompilerFlag)
+     Check_C_Compiler_Flag(-m32 M32_OK)
+@@ -98,6 +101,9 @@ if (WAMR_BUILD_JIT EQUAL 1)
+       if (WAMR_BUILD_PLATFORM STREQUAL "windows")
+         set (LLVM_BUILD_ROOT "${LLVM_SRC_ROOT}/win32build")
+       endif ()
++      if ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
++        set (LLVM_BUILD_ROOT "${LLVM_SRC_ROOT}/win32build")
++      endif () # decent-sgx
+       if (NOT EXISTS "${LLVM_BUILD_ROOT}")
+         message (FATAL_ERROR "Cannot find LLVM dir: ${LLVM_BUILD_ROOT}")
+       endif ()
+diff --git a/core/iwasm/common/iwasm_common.cmake b/core/iwasm/common/iwasm_common.cmake
+index de0826e..f7b684a 100644
+--- a/core/iwasm/common/iwasm_common.cmake
++++ b/core/iwasm/common/iwasm_common.cmake
+@@ -28,12 +28,16 @@ elseif (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_6
+   if (NOT WAMR_BUILD_SIMD EQUAL 1)
+     if (WAMR_BUILD_PLATFORM STREQUAL "windows")
+       set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_em64.asm)
++    elseif ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
++      set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_em64.asm)
+     else ()
+       set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_em64.s)
+     endif ()
+   else ()
+     if (WAMR_BUILD_PLATFORM STREQUAL "windows")
+       set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_em64_simd.asm)
++    elseif ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
++      set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_em64_simd.asm)
+     else()
+       set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_em64_simd.s)
+     endif()
+@@ -41,6 +45,8 @@ elseif (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_6
+ elseif (WAMR_BUILD_TARGET STREQUAL "X86_32")
+   if (WAMR_BUILD_PLATFORM STREQUAL "windows")
+     set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_ia32.asm)
++  elseif ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
++    set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_ia32.asm)
+   else ()
+     set (source_all ${c_source_all} ${IWASM_COMMON_DIR}/arch/invokeNative_ia32.s)
+   endif ()
+diff --git a/core/iwasm/common/wasm_runtime_common.c b/core/iwasm/common/wasm_runtime_common.c
+index fb9d7c3..072fa81 100644
+--- a/core/iwasm/common/wasm_runtime_common.c
++++ b/core/iwasm/common/wasm_runtime_common.c
+@@ -1198,6 +1198,65 @@ wasm_runtime_lookup_function(WASMModuleInstanceCommon *const module_inst,
+     return NULL;
+ }
+ 
++#if WASM_ENABLE_MULTI_MODULE != 0
++WASMGlobalInstance *
++wasm_runtime_lookup_global(WASMModuleInstanceCommon *const module_inst,
++                           const char *name)
++{
++#if WASM_ENABLE_INTERP != 0
++    if (module_inst->module_type == Wasm_Module_Bytecode)
++        return wasm_lookup_global(
++            (const WASMModuleInstance *)module_inst, name);
++#endif
++    return NULL;
++}
++#endif
++
++static uint8*
++wasm_runtime_get_global_addr(WASMModuleInstanceCommon *const module_inst,
++                             WASMGlobalInstance *const global_inst)
++{
++#if WASM_ENABLE_INTERP != 0
++    if (module_inst->module_type == Wasm_Module_Bytecode)
++        return wasm_get_global_addr(
++                    (const WASMModuleInstance *)module_inst, global_inst);
++#endif
++#if WASM_ENABLE_AOT != 0
++    // if (module_inst->module_type == Wasm_Module_AoT)
++    //     return aot_get_global_addr(
++    //                 (const AOTModuleInstance *)module_inst, global_inst);
++#endif
++    return NULL;
++}
++
++bool
++wasm_runtime_get_global_i32(WASMModuleInstanceCommon *const module_inst,
++                            WASMGlobalInstance *const global_inst,
++                            int32 *g_value)
++{
++    uint8* global_addr = wasm_runtime_get_global_addr(
++                        module_inst, global_inst);
++    if (global_addr && global_inst->type == VALUE_TYPE_I32) {
++        *g_value = *(int32 *)global_addr;
++        return true;
++    }
++    return false;
++}
++
++bool
++wasm_runtime_get_global_i64(WASMModuleInstanceCommon *const module_inst,
++                            WASMGlobalInstance *const global_inst,
++                            int64 *g_value)
++{
++    uint8* global_addr = wasm_runtime_get_global_addr(
++                        module_inst, global_inst);
++    if (global_addr && global_inst->type == VALUE_TYPE_I64) {
++        *g_value = GET_I64_FROM_ADDR(global_addr);
++        return true;
++    }
++    return false;
++}
++
+ #if WASM_ENABLE_REF_TYPES != 0
+ /* (uintptr_t)externref -> (uint32_t)index */
+ /*   argv               ->   *ret_argv */
+diff --git a/core/iwasm/include/wasm_export.h b/core/iwasm/include/wasm_export.h
+index 15efb14..d60a25b 100644
+--- a/core/iwasm/include/wasm_export.h
++++ b/core/iwasm/include/wasm_export.h
+@@ -67,6 +67,10 @@ typedef struct WASMModuleCommon *wasm_module_t;
+ struct WASMModuleInstanceCommon;
+ typedef struct WASMModuleInstanceCommon *wasm_module_inst_t;
+ 
++/* Instantiated WASM global */
++struct WASMGlobalInstance;
++typedef struct WASMGlobalInstance *wasm_global_inst_t;
++
+ /* Function instance */
+ typedef void WASMFunctionInstanceCommon;
+ typedef WASMFunctionInstanceCommon *wasm_function_inst_t;
+@@ -403,6 +407,46 @@ WASM_RUNTIME_API_EXTERN wasm_function_inst_t
+ wasm_runtime_lookup_function(wasm_module_inst_t const module_inst,
+                              const char *name, const char *signature);
+ 
++/**
++ * Lookup an exported global in the WASM module instance.
++ *
++ * @param module_inst the module instance
++ * @param name the name of the global
++ *
++ * @return the global instance found, NULL if not found
++ */
++WASM_RUNTIME_API_EXTERN wasm_global_inst_t
++wasm_runtime_lookup_global(wasm_module_inst_t const module_inst,
++                           const char *name);
++
++/**
++ * @brief Get the value of a I32 global variable
++ *
++ * @param module_inst the module instance
++ * @param global_inst the global instance
++ * @param g_value the pointer to store the value
++ *
++ * @return true if success, false otherwise
++ */
++WASM_RUNTIME_API_EXTERN bool
++wasm_runtime_get_global_i32(wasm_module_inst_t const module_inst,
++                            wasm_global_inst_t const global_inst,
++                            int32_t *g_value);
++
++/**
++ * @brief Get the value of a I64 global variable
++ *
++ * @param module_inst the module instance
++ * @param global_inst the global instance
++ * @param g_value the pointer to store the value
++ *
++ * @return true if success, false otherwise
++ */
++WASM_RUNTIME_API_EXTERN bool
++wasm_runtime_get_global_i64(wasm_module_inst_t const module_inst,
++                            wasm_global_inst_t const global_inst,
++                            int64_t *g_value);
++
+ /**
+  * Create execution environment for a WASM module instance.
+  *
+diff --git a/core/iwasm/interpreter/wasm_runtime.c b/core/iwasm/interpreter/wasm_runtime.c
+index 815f7e8..0e9c3bb 100644
+--- a/core/iwasm/interpreter/wasm_runtime.c
++++ b/core/iwasm/interpreter/wasm_runtime.c
+@@ -1685,6 +1685,21 @@ wasm_lookup_table(const WASMModuleInstance *module_inst, const char *name)
+ }
+ #endif
+ 
++uint8 *
++wasm_get_global_addr(const WASMModuleInstance *module_inst,
++                     const WASMGlobalInstance *global)
++{
++    uint8 *global_data = module_inst->global_data;
++#if WASM_ENABLE_MULTI_MODULE == 0
++    return global_data + global->data_offset;
++#else
++    return global->import_global_inst
++               ? global->import_module_inst->global_data
++                     + global->import_global_inst->data_offset
++               : global_data + global->data_offset;
++#endif
++}
++
+ static bool
+ clear_wasi_proc_exit_exception(WASMModuleInstance *module_inst)
+ {
+diff --git a/core/iwasm/interpreter/wasm_runtime.h b/core/iwasm/interpreter/wasm_runtime.h
+index 40e9af1..3be5c43 100644
+--- a/core/iwasm/interpreter/wasm_runtime.h
++++ b/core/iwasm/interpreter/wasm_runtime.h
+@@ -308,6 +308,10 @@ WASMTableInstance *
+ wasm_lookup_table(const WASMModuleInstance *module_inst, const char *name);
+ #endif
+ 
++uint8 *
++wasm_get_global_addr(const WASMModuleInstance *module_inst,
++                     const WASMGlobalInstance *global);
++
+ bool
+ wasm_call_function(WASMExecEnv *exec_env, WASMFunctionInstance *function,
+                    unsigned argc, uint32 argv[]);
+diff --git a/core/iwasm/libraries/libc-builtin/libc_builtin_wrapper.c b/core/iwasm/libraries/libc-builtin/libc_builtin_wrapper.c
+index a6e8693..dc9a0cf 100644
+--- a/core/iwasm/libraries/libc-builtin/libc_builtin_wrapper.c
++++ b/core/iwasm/libraries/libc-builtin/libc_builtin_wrapper.c
+@@ -13,6 +13,18 @@
+ #define strcasecmp _stricmp
+ #endif
+ 
++#ifdef BH_PLATFORM_WIN_SGX
++#ifdef strncasecmp
++#undef strncasecmp
++#endif
++#ifdef strcasecmp
++#undef strcasecmp
++#endif
++
++#define strncasecmp wasm_os_strncasecmp
++#define strcasecmp  wasm_os_strcasecmp
++#endif
++
+ void
+ wasm_runtime_set_exception(wasm_module_inst_t module, const char *exception);
+ 
+diff --git a/core/shared/platform/decent-sgx/platform_api_extension.c b/core/shared/platform/decent-sgx/platform_api_extension.c
+new file mode 100644
+index 0000000..781c8aa
+--- /dev/null
++++ b/core/shared/platform/decent-sgx/platform_api_extension.c
+@@ -0,0 +1,18 @@
++/*
++ * Copyright (C) 2019 Intel Corporation.  All rights reserved.
++ * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++ */
++
++#include "platform_api_extension.h"
++
++#include <sgx_thread.h>
++
++int wasm_os_cond_init(korp_cond *cond)
++{
++    return sgx_thread_cond_init(cond, NULL);
++}
++
++int wasm_os_cond_destroy(korp_cond *cond)
++{
++    return sgx_thread_cond_destroy(cond);
++}
+diff --git a/core/shared/platform/decent-sgx/platform_api_vmcore.c b/core/shared/platform/decent-sgx/platform_api_vmcore.c
+new file mode 100644
+index 0000000..c13a993
+--- /dev/null
++++ b/core/shared/platform/decent-sgx/platform_api_vmcore.c
+@@ -0,0 +1,182 @@
++/*
++ * Copyright (C) 2019 Intel Corporation.  All rights reserved.
++ * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++ */
++
++#include "platform_api_vmcore.h"
++#include "sgx_rsrv_mem_mngr.h"
++
++extern int getpagesize(void);
++
++#define FIXED_BUFFER_SIZE (1 << 9)
++
++static os_print_function_t print_function = NULL;
++
++static int getpagesize_impl()
++{
++	return getpagesize();
++}
++
++int bh_platform_init()
++{
++    return 0;
++}
++
++void bh_platform_destroy()
++{}
++
++void * wasm_os_malloc(unsigned size)
++{
++    return malloc(size);
++}
++
++void * wasm_os_realloc(void *ptr, unsigned size)
++{
++    return realloc(ptr, size);
++}
++
++void wasm_os_free(void *ptr)
++{
++    free(ptr);
++}
++
++void wasm_os_set_print_function(os_print_function_t pf)
++{
++    print_function = pf;
++}
++
++int wasm_os_printf(const char *message, ...)
++{
++    if (print_function != NULL) {
++        char msg[FIXED_BUFFER_SIZE] = { '\0' };
++        va_list ap;
++        va_start(ap, message);
++        vsnprintf(msg, FIXED_BUFFER_SIZE, message, ap);
++        va_end(ap);
++        print_function(msg);
++    }
++
++    return 0;
++}
++
++int wasm_os_vprintf(const char *format, va_list arg)
++{
++    if (print_function != NULL) {
++        char msg[FIXED_BUFFER_SIZE] = { '\0' };
++        vsnprintf(msg, FIXED_BUFFER_SIZE, format, arg);
++        print_function(msg);
++    }
++
++    return 0;
++}
++
++uint64 wasm_os_time_get_boot_microsecond()
++{
++    return 0;
++}
++
++korp_tid wasm_os_self_thread()
++{
++    return sgx_thread_self();
++}
++
++uint8 * wasm_os_thread_get_stack_boundary()
++{
++    /* TODO: get sgx stack boundary */
++    return NULL;
++}
++
++int wasm_os_mutex_init(korp_mutex *mutex)
++{
++    return sgx_thread_mutex_init(mutex, NULL);
++}
++
++int wasm_os_mutex_destroy(korp_mutex *mutex)
++{
++    return sgx_thread_mutex_destroy(mutex);
++}
++
++int wasm_os_mutex_lock(korp_mutex *mutex)
++{
++    return sgx_thread_mutex_lock(mutex);
++}
++
++int wasm_os_mutex_unlock(korp_mutex *mutex)
++{
++    return sgx_thread_mutex_unlock(mutex);
++}
++
++#ifdef BH_PLATFORM_LINUX_SGX
++void * wasm_os_mmap(void *hint, size_t size, int prot, int flags)
++{
++    int mprot = 0;
++    uint64 aligned_size, page_size;
++    void *ret = NULL;
++    sgx_status_t st = 0;
++
++    page_size = getpagesize_impl();
++    aligned_size = (size + page_size - 1) & ~(page_size - 1);
++
++    if (aligned_size >= UINT32_MAX)
++        return NULL;
++
++    ret = sgx_alloc_rsrv_mem(aligned_size);
++    if (ret == NULL) {
++        wasm_os_printf("os_mmap(size=%u, aligned size=%lu, prot=0x%x) failed.", size,
++                  aligned_size, prot);
++        return NULL;
++    }
++
++    if (prot & MMAP_PROT_READ)
++        mprot |= SGX_PROT_READ;
++    if (prot & MMAP_PROT_WRITE)
++        mprot |= SGX_PROT_WRITE;
++    if (prot & MMAP_PROT_EXEC)
++        mprot |= SGX_PROT_EXEC;
++
++    st = sgx_tprotect_rsrv_mem(ret, aligned_size, mprot);
++    if (st != SGX_SUCCESS) {
++        wasm_os_printf("os_mmap(size=%u, prot=0x%x) failed to set protect.", size,
++                  prot);
++        sgx_free_rsrv_mem(ret, aligned_size);
++        return NULL;
++    }
++
++    return ret;
++}
++
++void wasm_os_munmap(void *addr, size_t size)
++{
++    uint64 aligned_size, page_size;
++
++    page_size = getpagesize_impl();
++    aligned_size = (size + page_size - 1) & ~(page_size - 1);
++    sgx_free_rsrv_mem(addr, aligned_size);
++}
++
++int wasm_os_mprotect(void *addr, size_t size, int prot)
++{
++    int mprot = 0;
++    sgx_status_t st = 0;
++    uint64 aligned_size, page_size;
++
++    page_size = getpagesize_impl();
++    aligned_size = (size + page_size - 1) & ~(page_size - 1);
++
++    if (prot & MMAP_PROT_READ)
++        mprot |= SGX_PROT_READ;
++    if (prot & MMAP_PROT_WRITE)
++        mprot |= SGX_PROT_WRITE;
++    if (prot & MMAP_PROT_EXEC)
++        mprot |= SGX_PROT_EXEC;
++    st = sgx_tprotect_rsrv_mem(addr, aligned_size, mprot);
++    if (st != SGX_SUCCESS)
++        wasm_os_printf("os_mprotect(addr=0x%" PRIx64 ", size=%u, prot=0x%x) failed.",
++                  (uintptr_t)addr, size, prot);
++
++    return (st == SGX_SUCCESS ? 0 : -1);
++}
++#endif
++
++void wasm_os_dcache_flush(void)
++{}
+diff --git a/core/shared/platform/decent-sgx/platform_internal.h b/core/shared/platform/decent-sgx/platform_internal.h
+new file mode 100644
+index 0000000..88d938b
+--- /dev/null
++++ b/core/shared/platform/decent-sgx/platform_internal.h
+@@ -0,0 +1,73 @@
++/*
++ * Copyright (C) 2019 Intel Corporation.  All rights reserved.
++ * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++ */
++
++#ifndef _PLATFORM_INTERNAL_H
++#define _PLATFORM_INTERNAL_H
++
++#include <ctype.h>
++#include <errno.h>
++#include <inttypes.h>
++#include <limits.h>
++#include <math.h>
++#include <stdarg.h>
++#include <stdbool.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#include <sgx_thread.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++typedef sgx_thread_t       korp_tid;
++typedef sgx_thread_mutex_t korp_mutex;
++typedef sgx_thread_cond_t  korp_cond;
++
++#define os_malloc        wasm_os_malloc
++#define os_realloc       wasm_os_realloc
++#define os_free          wasm_os_free
++#define os_printf        wasm_os_printf
++#define os_vprintf       wasm_os_vprintf
++
++#define os_time_get_boot_microsecond   wasm_os_time_get_boot_microsecond
++
++#define os_thread_get_stack_boundary   wasm_os_thread_get_stack_boundary
++
++#define os_self_thread   wasm_os_self_thread
++#define os_mutex_init    wasm_os_mutex_init
++#define os_mutex_destroy wasm_os_mutex_destroy
++#define os_mutex_lock    wasm_os_mutex_lock
++#define os_mutex_unlock  wasm_os_mutex_unlock
++
++#ifdef BH_PLATFORM_LINUX_SGX
++#define os_mmap          wasm_os_mmap
++#define os_munmap        wasm_os_munmap
++#define os_mprotect      wasm_os_mprotect
++#endif
++#define os_dcache_flush  wasm_os_dcache_flush
++
++#define os_cond_init     wasm_os_cond_init
++#define os_cond_destroy  wasm_os_cond_destroy
++
++#define _STACK_SIZE_ADJUSTMENT (32 * 1024)
++
++/* Stack size of applet threads's native part.  */
++#define BH_APPLET_PRESERVED_STACK_SIZE (8 * 1024 + _STACK_SIZE_ADJUSTMENT)
++
++/* Default thread priority */
++#define BH_THREAD_DEFAULT_PRIORITY 0
++
++typedef void (*os_print_function_t)(const char *message);
++
++void wasm_os_set_print_function(os_print_function_t pf);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* end of _PLATFORM_INTERNAL_H */
+diff --git a/core/shared/platform/decent-sgx/sgx_rsrv_mem_mngr.h b/core/shared/platform/decent-sgx/sgx_rsrv_mem_mngr.h
+new file mode 100644
+index 0000000..5555d4d
+--- /dev/null
++++ b/core/shared/platform/decent-sgx/sgx_rsrv_mem_mngr.h
+@@ -0,0 +1,95 @@
++/*
++ * Copyright (C) 2011-2019 Intel Corporation. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *
++ *   * Redistributions of source code must retain the above copyright
++ *     notice, this list of conditions and the following disclaimer.
++ *   * Redistributions in binary form must reproduce the above copyright
++ *     notice, this list of conditions and the following disclaimer in
++ *     the documentation and/or other materials provided with the
++ *     distribution.
++ *   * Neither the name of Intel Corporation nor the names of its
++ *     contributors may be used to endorse or promote products derived
++ *     from this software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ *
++ */
++
++/*
++ * This file is copied from
++ * https://github.com/intel/linux-sgx/blob/4589daddd58bec7367a6a9de3fe301e6de17671a/common/inc/internal/sgx_rsrv_mem_mngr.h
++ * The reason we copied here is that the official SGX SDK release has
++ * not included this header file yet.
++ */
++
++#pragma once
++
++#ifndef _SGX_RSRV_MEM_MNGR_H_
++#define _SGX_RSRV_MEM_MNGR_H_
++
++#include "stdint.h"
++#include "sgx_error.h"
++
++#define SGX_PROT_READ 0x1  /* page can be read */
++#define SGX_PROT_WRITE 0x2 /* page can be written */
++#define SGX_PROT_EXEC 0x4  /* page can be executed */
++#define SGX_PROT_NONE 0x0  /* page can not be accessed */
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/* Allocate a range of EPC memory from the reserved memory area with RW
++ * permission
++ *
++ * Parameters:
++ * Inputs: length [in]: Size of region to be allocated in bytes. Page aligned.
++ * Return: Starting address of the new allocated memory area on success;
++ * otherwise NULL
++ */
++void *
++sgx_alloc_rsrv_mem(size_t length);
++
++/* Free a range of EPC memory from the reserved memory area
++ *
++ * Parameters:
++ * Inputs: addr[in]: Starting address of region to be freed. Page aligned.
++ *         length[in]: The length of the memory to be freed in bytes.
++ *                     Page aligned.
++ * Return: 0 on success; otherwise -1
++ */
++int
++sgx_free_rsrv_mem(void *addr, size_t length);
++
++/* Modify the access permissions of the pages in the reserved memory area.
++ *
++ * Parameters:
++ * Inputs: addr[in]: Starting address of region which needs to change access
++ *                   permission. Page aligned.
++ *         length[in]: The length of the memory to be manipulated in bytes.
++ *                     Page aligned.
++ *         prot[in]: The target memory protection.
++ * Return: sgx_status_t - SGX_SUCCESS or failure as defined in sgx_error.h
++ */
++sgx_status_t
++sgx_tprotect_rsrv_mem(void *addr, size_t len, int prot);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif
+diff --git a/core/shared/platform/decent-sgx/sgx_string.c b/core/shared/platform/decent-sgx/sgx_string.c
+new file mode 100644
+index 0000000..afa0b88
+--- /dev/null
++++ b/core/shared/platform/decent-sgx/sgx_string.c
+@@ -0,0 +1,111 @@
++/*  $OpenBSD: strcasecmp.c,v 1.6 2005/08/08 08:05:37 espie Exp $    */
++
++/*
++ * Copyright (c) 1987, 1993
++ *  The Regents of the University of California.  All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 3. Neither the name of the University nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++/*
++ * This file is copied from
++ * https://github.com/intel/linux-sgx/blob/master/sdk/tlibc/string/strcasecmp.c
++ * since the Windows release of SGX SDK doesn't implement these functions
++ */
++
++#include "platform_internal.h"
++
++typedef unsigned char u_char;
++
++#ifdef BH_PLATFORM_WIN_SGX
++/*
++ * This array is designed for mapping upper and lower case letter
++ * together for a case independent comparison.  The mappings are
++ * based upon ascii character sequences.
++ */
++static const u_char charmap[] = {
++    '\000', '\001', '\002', '\003', '\004', '\005', '\006', '\007',
++    '\010', '\011', '\012', '\013', '\014', '\015', '\016', '\017',
++    '\020', '\021', '\022', '\023', '\024', '\025', '\026', '\027',
++    '\030', '\031', '\032', '\033', '\034', '\035', '\036', '\037',
++    '\040', '\041', '\042', '\043', '\044', '\045', '\046', '\047',
++    '\050', '\051', '\052', '\053', '\054', '\055', '\056', '\057',
++    '\060', '\061', '\062', '\063', '\064', '\065', '\066', '\067',
++    '\070', '\071', '\072', '\073', '\074', '\075', '\076', '\077',
++    '\100', '\141', '\142', '\143', '\144', '\145', '\146', '\147',
++    '\150', '\151', '\152', '\153', '\154', '\155', '\156', '\157',
++    '\160', '\161', '\162', '\163', '\164', '\165', '\166', '\167',
++    '\170', '\171', '\172', '\133', '\134', '\135', '\136', '\137',
++    '\140', '\141', '\142', '\143', '\144', '\145', '\146', '\147',
++    '\150', '\151', '\152', '\153', '\154', '\155', '\156', '\157',
++    '\160', '\161', '\162', '\163', '\164', '\165', '\166', '\167',
++    '\170', '\171', '\172', '\173', '\174', '\175', '\176', '\177',
++    '\200', '\201', '\202', '\203', '\204', '\205', '\206', '\207',
++    '\210', '\211', '\212', '\213', '\214', '\215', '\216', '\217',
++    '\220', '\221', '\222', '\223', '\224', '\225', '\226', '\227',
++    '\230', '\231', '\232', '\233', '\234', '\235', '\236', '\237',
++    '\240', '\241', '\242', '\243', '\244', '\245', '\246', '\247',
++    '\250', '\251', '\252', '\253', '\254', '\255', '\256', '\257',
++    '\260', '\261', '\262', '\263', '\264', '\265', '\266', '\267',
++    '\270', '\271', '\272', '\273', '\274', '\275', '\276', '\277',
++    '\300', '\301', '\302', '\303', '\304', '\305', '\306', '\307',
++    '\310', '\311', '\312', '\313', '\314', '\315', '\316', '\317',
++    '\320', '\321', '\322', '\323', '\324', '\325', '\326', '\327',
++    '\330', '\331', '\332', '\333', '\334', '\335', '\336', '\337',
++    '\340', '\341', '\342', '\343', '\344', '\345', '\346', '\347',
++    '\350', '\351', '\352', '\353', '\354', '\355', '\356', '\357',
++    '\360', '\361', '\362', '\363', '\364', '\365', '\366', '\367',
++    '\370', '\371', '\372', '\373', '\374', '\375', '\376', '\377',
++};
++
++int wasm_os_strcasecmp(const char *s1, const char *s2)
++{
++    const u_char *cm = charmap;
++    const u_char *us1 = (const u_char *)s1;
++    const u_char *us2 = (const u_char *)s2;
++
++    while (cm[*us1] == cm[*us2++])
++        if (*us1++ == '\0')
++            return (0);
++    return (cm[*us1] - cm[*--us2]);
++}
++
++int wasm_os_strncasecmp(const char *s1, const char *s2, size_t n)
++{
++    if (n != 0) {
++        const u_char *cm = charmap;
++        const u_char *us1 = (const u_char *)s1;
++        const u_char *us2 = (const u_char *)s2;
++
++        do {
++            if (cm[*us1] != cm[*us2++])
++                return (cm[*us1] - cm[*--us2]);
++            if (*us1++ == '\0')
++                break;
++        } while (--n != 0);
++    }
++    return (0);
++}
++#endif
+diff --git a/core/shared/platform/decent-sgx/shared_platform.cmake b/core/shared/platform/decent-sgx/shared_platform.cmake
+new file mode 100644
+index 0000000..d5da0a4
+--- /dev/null
++++ b/core/shared/platform/decent-sgx/shared_platform.cmake
+@@ -0,0 +1,52 @@
++# Copyright (C) 2019 Intel Corporation.  All rights reserved.
++# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++
++set (PLATFORM_SHARED_DIR ${CMAKE_CURRENT_LIST_DIR})
++
++if(WIN32)
++  add_definitions(-DBH_PLATFORM_WIN_SGX)
++else()
++  add_definitions(-DBH_PLATFORM_LINUX_SGX)
++endif()
++
++include_directories(${PLATFORM_SHARED_DIR})
++include_directories(${PLATFORM_SHARED_DIR}/../include)
++
++if(WIN32)
++  if ("$ENV{SGXSDKInstallPath}" STREQUAL "")
++    set (SGX_SDK_DIR "C:/Program Files (x86)/Intel/IntelSGXSDK")
++  else()
++    set (SGX_SDK_DIR $ENV{SGXSDKInstallPath})
++  endif()
++else()
++  if ("$ENV{SGX_SDK}" STREQUAL "")
++    set (SGX_SDK_DIR "/opt/intel/sgxsdk")
++  else()
++    set (SGX_SDK_DIR $ENV{SGX_SDK})
++  endif()
++endif()
++
++include_directories (${SGX_SDK_DIR}/include)
++if(WIN32)
++  if (NOT BUILD_UNTRUST_PART EQUAL 1)
++    include_directories (${SGX_SDK_DIR}/include/tlibc
++                        ${SGX_SDK_DIR}/include/libc++)
++  endif ()
++else()
++  if (NOT BUILD_UNTRUST_PART EQUAL 1)
++    include_directories (${SGX_SDK_DIR}/include/tlibc
++                        ${SGX_SDK_DIR}/include/libcxx)
++  endif ()
++endif()
++
++if (NOT WAMR_BUILD_LIBC_WASI EQUAL 1)
++  add_definitions(-DSGX_DISABLE_WASI)
++endif ()
++
++if (NOT WAMR_BUILD_THREAD_MGR EQUAL 1)
++  add_definitions(-DSGX_DISABLE_PTHREAD)
++endif ()
++
++file (GLOB source_all ${PLATFORM_SHARED_DIR}/*.c)
++
++set (PLATFORM_SHARED_SOURCE ${source_all})
+diff --git a/product-mini/platforms/decent-sgx/CMakeLists.txt b/product-mini/platforms/decent-sgx/CMakeLists.txt
+new file mode 100644
+index 0000000..1ead9d6
+--- /dev/null
++++ b/product-mini/platforms/decent-sgx/CMakeLists.txt
+@@ -0,0 +1,110 @@
++# Copyright (C) 2019 Intel Corporation.  All rights reserved.
++# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++
++cmake_minimum_required (VERSION 3.0)
++
++project (iwasm LANGUAGES C ASM)
++
++if (WIN32)
++  enable_language(ASM_MASM)
++endif()
++
++set (WAMR_BUILD_PLATFORM "decent-sgx")
++
++# Reset default linker flags
++set (CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
++set (CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
++
++# Set WAMR_BUILD_TARGET
++if (NOT DEFINED WAMR_BUILD_TARGET)
++  if (CMAKE_SIZEOF_VOID_P EQUAL 8)
++    # Build as X86_64 by default in 64-bit platform
++    set (WAMR_BUILD_TARGET "X86_64")
++  else ()
++    # Build as X86_32 by default in 32-bit platform
++    set (WAMR_BUILD_TARGET "X86_32")
++  endif ()
++endif ()
++
++if (NOT CMAKE_BUILD_TYPE)
++  set(CMAKE_BUILD_TYPE Release)
++endif ()
++
++if (NOT DEFINED WAMR_BUILD_INTERP)
++  # Enable Interpreter by default
++  set (WAMR_BUILD_INTERP 1)
++endif ()
++
++if (NOT DEFINED WAMR_BUILD_AOT)
++  if (NOT WIN32)
++    # Enable AOT by default
++    # Please install Intel SGX SDKv2.8 or later.
++    set (WAMR_BUILD_AOT 1)
++  else ()
++    # Disable AOT by default for Windows since implementations for
++    # platform_api_vmcore.h section 2 are missing.
++    set (WAMR_BUILD_AOT 0)
++  endif ()
++endif ()
++
++if (NOT DEFINED WAMR_BUILD_JIT)
++  # Disable JIT by default.
++  set (WAMR_BUILD_JIT 0)
++endif ()
++
++if (NOT DEFINED WAMR_BUILD_LIBC_BUILTIN)
++  # Enable libc builtin support by default
++  set (WAMR_BUILD_LIBC_BUILTIN 1)
++endif ()
++
++if (NOT DEFINED WAMR_BUILD_LIBC_WASI)
++  # Enable libc wasi support by default
++  set (WAMR_BUILD_LIBC_WASI 0)
++endif ()
++
++if (NOT DEFINED WAMR_BUILD_FAST_INTERP)
++  # Enable fast interpreter
++  set (WAMR_BUILD_FAST_INTERP 1)
++endif ()
++
++if (NOT DEFINED WAMR_BUILD_MULTI_MODULE)
++  # Enable multiple modules
++  set (WAMR_BUILD_MULTI_MODULE 1)
++endif ()
++
++if (NOT DEFINED WAMR_BUILD_LIB_PTHREAD)
++  # Enable pthread library by default
++  set (WAMR_BUILD_LIB_PTHREAD 0)
++endif ()
++
++if (MSVC)
++  STRING (REGEX REPLACE "/RTC(su|[1su])" ""
++    CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
++  STRING (REGEX REPLACE "/RTC(su|[1su])" ""
++    CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
++  STRING (REGEX REPLACE "/RTC(su|[1su])" ""
++    CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
++  STRING (REGEX REPLACE "/RTC(su|[1su])" ""
++    CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
++endif()
++
++if (UNIX)
++  set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
++  set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -ffunction-sections -fdata-sections \
++                                       -Wall -Wno-unused-parameter -Wno-pedantic \
++                                       -nostdinc -fvisibility=hidden -fpie" )
++endif()
++
++set (WAMR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../..)
++
++include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
++
++add_library(vmlib_decent_sgx ${WAMR_RUNTIME_LIB_SOURCE})
++
++target_include_directories(vmlib_decent_sgx
++                            PUBLIC ${WAMR_ROOT_DIR}/core/iwasm/include)
++
++if (WIN32)
++  target_compile_definitions(vmlib_decent_sgx
++                              PUBLIC COMPILING_WASM_RUNTIME_API=1)
++endif()
+diff --git a/wamr-compiler/CMakeLists.txt b/wamr-compiler/CMakeLists.txt
+index 665da94..e2965d1 100644
+--- a/wamr-compiler/CMakeLists.txt
++++ b/wamr-compiler/CMakeLists.txt
+@@ -5,6 +5,11 @@ cmake_minimum_required (VERSION 2.8)
+ 
+ string (TOLOWER ${CMAKE_HOST_SYSTEM_NAME} WAMR_BUILD_PLATFORM)
+ 
++if ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
++  project (aot-compiler C ASM CXX)
++  enable_language (ASM_MASM)
++  add_definitions(-DCOMPILING_WASM_RUNTIME_API=1)
++else () # decent-sgx
+ if (NOT WAMR_BUILD_PLATFORM STREQUAL "windows")
+   project (aot-compiler)
+ else()
+@@ -12,6 +17,7 @@ else()
+   enable_language (ASM_MASM)
+   add_definitions(-DCOMPILING_WASM_RUNTIME_API=1)
+ endif()
++endif () # decent-sgx
+ 
+ set (CMAKE_CXX_STANDARD 14)
+ 
+@@ -54,6 +60,10 @@ if (NOT WAMR_BUILD_TARGET)
+     if (("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "Win32"))
+       set (WAMR_BUILD_TARGET "X86_32")
+     endif()
++  elseif ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
++    if (("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "Win32"))
++      set (WAMR_BUILD_TARGET "X86_32")
++    endif()
+   elseif (WAMR_BUILD_PLATFORM STREQUAL "darwin")
+     if (CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
+       set (WAMR_BUILD_TARGET "AARCH64")
+@@ -93,11 +103,14 @@ message ("-- Build as target ${WAMR_BUILD_TARGET}")
+ if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+     if (WAMR_BUILD_TARGET STREQUAL "X86_64" OR WAMR_BUILD_TARGET STREQUAL "AMD_64"
+         OR WAMR_BUILD_TARGET MATCHES "AARCH64.*" OR WAMR_BUILD_TARGET MATCHES "RISCV64.*")
++    if ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
++    else () # decent-sgx
+     if (NOT WAMR_BUILD_PLATFORM STREQUAL "windows")
+       # Add -fPIC flag if build as 64-bit
+       set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+       set (CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "${CMAKE_SHARED_LIBRARY_LINK_C_FLAGS} -fPIC")
+     endif ()
++    endif () # decent-sgx
+   else ()
+     add_definitions (-m32)
+     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -m32")
+@@ -120,6 +133,12 @@ endif()
+ # Enable LLVM
+ if (NOT WAMR_BUILD_WITH_CUSTOM_LLVM)
+   set (LLVM_SRC_ROOT "${PROJECT_SOURCE_DIR}/../core/deps/llvm")
++  if ((WAMR_BUILD_PLATFORM STREQUAL "decent-sgx") AND WIN32) # decent-sgx
++    if (NOT EXISTS "${LLVM_SRC_ROOT}/win32build")
++      message (FATAL_ERROR "Cannot find LLVM dir: ${LLVM_SRC_ROOT}/win32build")
++    endif ()
++    set (CMAKE_PREFIX_PATH "${LLVM_SRC_ROOT}/win32build;${CMAKE_PREFIX_PATH}")
++  else () # decent-sgx
+   if (WAMR_BUILD_PLATFORM STREQUAL "windows")
+     if (NOT EXISTS "${LLVM_SRC_ROOT}/win32build")
+       message (FATAL_ERROR "Cannot find LLVM dir: ${LLVM_SRC_ROOT}/win32build")
+@@ -131,6 +150,7 @@ if (NOT WAMR_BUILD_WITH_CUSTOM_LLVM)
+     endif ()
+     set (CMAKE_PREFIX_PATH "${LLVM_SRC_ROOT}/build;${CMAKE_PREFIX_PATH}")
+   endif ()
++  endif () # decent-sgx
+ endif ()
+ 
+ find_package(LLVM REQUIRED CONFIG)
